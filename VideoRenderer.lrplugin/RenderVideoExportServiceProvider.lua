@@ -40,11 +40,19 @@ end
 
 exportServiceProvider.exportPresetFields = {
 		{ key = 'filename', default = 'video.mp4' },
+		{ key = 'codec', default = 'libx264' },
+		{ key = 'container', default = 'mp4' },
+		{ key = 'size', default = '1920x1080' },
+		{ key = 'framerate', default = '30' },
+		{ key = 'pixelFormat', default = 'yuv420p' },
+		-- -aspect aspect      set aspect ratio (4:3, 16:9 or 1.3333, 1.7777)
 }
 
 exportServiceProvider.startDialog = function ( propertyTable )
 
-    -- myLogger:info("startDialog")
+    myLogger:trace("startDialog")
+    --local updateChecker = require('UpdateChecker')
+    --updateChecker.check()
 	
 end
 
@@ -68,6 +76,7 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 				f:static_text {
 					title = LOC "$$$/VideoRenderer/ExportDialog/FileName=File Name:",
 					alignment = 'right',
+					width = share 'leftLabel',
 				},
 
 				f:edit_field {
@@ -75,6 +84,62 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 					truncation = 'middle',
 					immediate = true,
 					fill_horizontal = 1,
+				},
+			},
+			
+			f:row {
+				f:static_text {
+					title = LOC "$$$/VideoRenderer/ExportDialog/Size=Size:",
+					alignment = 'right',
+					width = share 'leftLabel',
+				},
+				
+				f:popup_menu {
+					value = bind 'size',
+					items = {
+						{ value = '3840x2160', title = "4K - 3840x2160" },
+						{ value = '2704x1524', title = "2.7K - 2704x1524" },
+						{ value = '1920x1080', title = "Full HD - 1920x1080" },
+						{ value = '1280x720', title = "HD - 1280x720" },
+						{ value = '640x480', title = "VGA - 640x480" },
+					},
+					-- Standard 4:3: 320x240, 640x480, 800x600, 1024x768
+					-- Widescreen 16:9: 640x360, 800x450, 960x540, 1024x576, 1280x720, and 1920x1080
+				},
+			},
+			
+			f:row {
+				f:static_text {
+					title = LOC "$$$/VideoRenderer/ExportDialog/FrameRate=Frame Rate:",
+					alignment = 'right',
+					width = share 'leftLabel',
+				},
+				
+				f:popup_menu {
+					value = bind 'framerate',
+					items = {
+						{ value = '25', title = "25 Frames/s" },
+						{ value = '30', title = "30 Frames/s" },
+						{ value = '48', title = "48 Frames/s" },
+						{ value = '60', title = "60 Frames/s" },
+					},
+				},
+			},
+			
+			f:row {
+				f:static_text {
+					title = LOC "$$$/VideoRenderer/ExportDialog/Codec=Codec:",
+					alignment = 'right',
+					width = share 'leftLabel',
+				},
+				
+				f:popup_menu {
+					value = bind 'codec',
+					items = {
+						{ value = 'libx264', title = "H264/MPEG-4 AVC" },
+						--{ value = 'libx265', title = "H265/HVEC" },
+						{ value = 'gif', title = "GIF" },
+					},
 				},
 			},
 		},
@@ -85,7 +150,7 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 end
 
 function exportServiceProvider.processRenderedPhotos( functionContext, exportContext )
-	myLogger:info("Start exportServiceProvider.processRenderedPhotos")
+	myLogger:trace("Start exportServiceProvider.processRenderedPhotos")
 	
 	local exportSession = exportContext.exportSession
 	local exportParams = exportContext.propertyTable
@@ -114,12 +179,13 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
 	local appPath = LrPathUtils.child(_PLUGIN.path, "ffmpeg")
     local outputPath = exportParams.LR_export_destinationPathPrefix
 	local filePattern = "\%05d.jpg" -- LrPathUtils.child
-	local frameRate = "30"
-	local size = "1920x1080" -- "3840x2160"
+	local codec = exportParams.codec -- default "libx264"
+	local frameRate = exportParams.framerate -- default "30"
+	local size = exportParams.size -- default "1920x1080"
 	local pixelFormat = "yuv420p"
 	local outputFile = exportParams.filename -- LrPathUtils.child
-	local command = string.format("\"%s\" -i %s/%s -c:v libx264 -r %s -s %s -pix_fmt %s \"%s/%s\"", 
-		appPath, outputPath, filePattern, frameRate, size, pixelFormat, outputPath, outputFile)
+	local command = string.format("\"%s\" -y -i %s/%s -c:v %s -r %s -s %s -pix_fmt %s \"%s/%s\"", 
+		appPath, outputPath, filePattern, codec, frameRate, size, pixelFormat, outputPath, outputFile)
     myLogger:info(string.format("command: %s", command))
     result = LrTasks.execute(command)
     myLogger:trace(string.format("ffmpeg result: %d", result))
