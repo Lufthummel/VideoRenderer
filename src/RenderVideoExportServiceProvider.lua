@@ -15,6 +15,15 @@ myLogger:enable("print")
 
 --------------------------------------------------------------------------------
 
+-- resize images
+-- https://alexthejourno.com/2014/03/time-lapse-simplified-in-a-script/
+-- x=1
+--for i in *.jpg; do
+--	counter=$(printf %06d $x)
+--	convert "$i" -resize "$vwidth"x"$vheight"^ -gravity "$img_gravity" -crop "$vwidth"x"$vheight"+0+0 +repage resized/img"$counter".jpg
+--	x=$(($x+1))
+--done
+
 local exportServiceProvider = {}
 
 exportServiceProvider.allowFileFormats = { 'JPEG' }
@@ -74,21 +83,6 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 			
 			f:row {
 				f:static_text {
-					title = LOC "$$$/VideoRenderer/ExportDialog/FileName=File Name:",
-					alignment = 'right',
-					width = share 'leftLabel',
-				},
-
-				f:edit_field {
-					value = bind 'filename',
-					truncation = 'middle',
-					immediate = true,
-					fill_horizontal = 1,
-				},
-			},
-			
-			f:row {
-				f:static_text {
 					title = LOC "$$$/VideoRenderer/ExportDialog/Size=Size:",
 					alignment = 'right',
 					width = share 'leftLabel',
@@ -105,6 +99,38 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 					},
 					-- Standard 4:3: 320x240, 640x480, 800x600, 1024x768
 					-- Widescreen 16:9: 640x360, 800x450, 960x540, 1024x576, 1280x720, and 1920x1080
+				},
+				
+				f:static_text {
+					title = LOC "$$$/VideoRenderer/ExportDialog/SourceSizeLabel=Source:",
+					alignment = 'right',
+					width = share 'leftLabel',
+				},
+				
+				f:static_text {
+					title = LOC "$$$/VideoRenderer/ExportDialog/SourceSizeValue=5184x3136",
+					alignment = 'right',
+					width = share 'leftLabel',
+					-- LrPhotoInfo(path) : width, height
+				},
+			},
+			
+			f:row {
+				f:static_text {
+					title = LOC "$$$/VideoRenderer/ExportDialog/Codec=Video Format:",
+					alignment = 'right',
+					width = share 'leftLabel',
+				},
+				
+				f:popup_menu {
+					value = bind 'codec',
+					items = {
+						{ value = 'libx264', title = "H.264" },
+						--{ value = 'libx265', title = "H265/HVEC (Experimental)" },
+						{ value = 'prores', title = "Apple ProRes" },
+						{ value = 'gif', title = "GIF" },
+    					-- extensionForFormat
+					},
 				},
 			},
 			
@@ -128,18 +154,16 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 			
 			f:row {
 				f:static_text {
-					title = LOC "$$$/VideoRenderer/ExportDialog/Codec=Codec:",
+					title = LOC "$$$/VideoRenderer/ExportDialog/FileName=File Name:",
 					alignment = 'right',
 					width = share 'leftLabel',
 				},
-				
-				f:popup_menu {
-					value = bind 'codec',
-					items = {
-						{ value = 'libx264', title = "H264/MPEG-4 AVC" },
-						--{ value = 'libx265', title = "H265/HVEC" },
-						{ value = 'gif', title = "GIF" },
-					},
+
+				f:edit_field {
+					value = bind 'filename',
+					truncation = 'middle',
+					immediate = true,
+					fill_horizontal = 1,
 				},
 			},
 		},
@@ -160,15 +184,41 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
       title = LOC("$$$/VideoRenderer/ProgressExport=Exporting ^1 Images for Video Renderer", numPhotos)
     })
     
+    for photo in exportSession:photosToExport() do
+    	-- (do something with photo)
+    	--photo:getDevelopSettings()
+--LuminanceAdjustmentAque: (number)
+--LuminanceAdjustmentBlue: (number)
+--LuminanceAdjustmentGreen: (number)
+--LuminanceAdjustmentMagenta: (number)
+--LuminanceAdjustmentOrange: (number)
+--LuminanceAdjustmentPurple: (number)
+--LuminanceAdjustmentRed: (number)
+--LuminanceAdjustmentYellow: (number)
+    end
+    
     local files = {}
     numFiles = 0
-    for i, rendition in exportContext:renditions({stopIfCanceled = true}) do
+    for i, rendition in exportContext:renditions({stopIfCanceled = true, progressScope = progressScope, renderProgressPortion = 0.5}) do
       local success, pathOrMessage = rendition:waitForRender()
       if progressScope:isCanceled() then
         break
       end
       if success then
         numFiles = numFiles + 1
+        local parent = LrPathUtils.parent(rendition.destinationPath)
+        local resizedFile = rendition.destinationPath 
+        -- resizedFile = LrPathUtils.child(parent,string.format("%i_resized.jpg",i))
+        
+        local command = string.format("convert \"%s\" " ..
+        	"-resize 1920x1080^ " ..
+        	"-gravity center " .. 
+        	"-crop 1920x1080+0+0 +repage " .. 
+        	"%s", 
+        	rendition.destinationPath,
+        	rendition.destinationPath)
+        myLogger:info(string.format("command: %s", command))
+        LrTasks.execute(command)
       else
         LrErrors.throwUserError("Lightroom rendition failed.")
       end
@@ -182,10 +232,19 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
 	local codec = exportParams.codec -- default "libx264"
 	local frameRate = exportParams.framerate -- default "30"
 	local size = exportParams.size -- default "1920x1080"
+	local scale = "scale=-1:1080"
+	-- local scaleExpr = "'if(gt(a,4/3),1920,-1)':'if(gt(a,4/3),-1,1080)'"
+	-- crop expression crop=w:h:x:y
+	-- crop=in_w/2:in_h/2:(in_w-out_w)/2+((in_w-out_w)/2)*sin(t*10):(in_h-out_h)/2 +((in_h-out_h)/2)*sin(t*13)"
+	-- crop=in_w/2:in_h/2:y:10+10*sin(n/10)
+	-- formula - crop = height - (width / (16.0 / 9.0))
+	-- filter: deshake, vidstabtransform, vidstabdetect
+	-- container: asf, avi, flv, mkv, mpg, mp4, ogg
 	local pixelFormat = "yuv420p"
 	local outputFile = exportParams.filename -- LrPathUtils.child
-	local command = string.format("\"%s\" -y -i %s/%s -c:v %s -r %s -s %s -pix_fmt %s \"%s/%s\"", 
-		appPath, outputPath, filePattern, codec, frameRate, size, pixelFormat, outputPath, outputFile)
+	--local redirect = "1> ffmpeg.log 2>&1"
+	local command = string.format("\"%s\" -y -i %s/%s -c:v %s -r %s -vf %s -pix_fmt %s \"%s/%s\"", 
+		appPath, outputPath, filePattern, codec, frameRate, scale, pixelFormat, outputPath, outputFile)
     myLogger:info(string.format("command: %s", command))
     result = LrTasks.execute(command)
     myLogger:trace(string.format("ffmpeg result: %d", result))
