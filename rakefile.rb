@@ -4,41 +4,75 @@ require 'fileutils'
 
 TARGET_DIR = 'target'
 PLUGIN_NAME = 'VideoRenderer.lrplugin'
-PACKAGE_DIR = TARGET_DIR + '/' + PLUGIN_NAME
+PLUGIN_DIR = TARGET_DIR + '/installer/' + PLUGIN_NAME
+DISK_IMAGE_DIR = TARGET_DIR + '/disk_image/'
+PACKAGE_NAME = 'Lightroom Video Renderer Plugin.pkg'
+PACKAGE_DIR = DISK_IMAGE_DIR + PACKAGE_NAME
 CLEAN.include(TARGET_DIR)
+
+IDENTIFIER = 'ch.andyhermann.videorenderer'
+INSTALL_LOCATION = '~/Library/Application\ Support/Adobe/Lightroom/Modules/'
 
 task :test do
   puts "Running unit tests"
 end
 
-desc "create a package directory"
-task :package do
-  directory PACKAGE_DIR
-  mkdir_p PACKAGE_DIR
+desc "create the necessary directories"
+task :init do
+  directory PLUGIN_DIR
+  mkdir_p PLUGIN_DIR
+  mkdir_p DISK_IMAGE_DIR
 end
 
 desc "copy all resources to the target folder"
-task :resources => :package do
-  cp 'src/ffmpeg', PACKAGE_DIR 
-  #cp 'LICENSE', PACKAGE_DIR
-  #cp 'README.md', PACKAGE_DIR
+task :resources => :init do
+  cp 'src/ffmpeg', PLUGIN_DIR 
+  cp 'LICENSE', PLUGIN_DIR
 end
 
 desc "compile the lua code"
-task :compile => :package do
+task :compile => :init do
+  # TODO: really compile code!
   FileList['src/*.lua'].each {|f|
-    cp f, PACKAGE_DIR
+    cp f, PLUGIN_DIR
   } 
 end
 
-desc "compress the target folder and name it .lrplugin"
-task :compress, [:version] => [:compile, :resources] do |t, args|
+desc "create the installer package"
+task :package, [:version] => [:compile, :resources] do |t, args|
+  version = args[:version] 
+  sh %{pkgbuild --identifier "#{IDENTIFIER}" --version "#{version}" --install-location #{INSTALL_LOCATION} --root #{TARGET_DIR}/installer "#{PACKAGE_DIR}" }  do |ok, res|
+    if !ok
+      puts "pkg creation failed (status = #{res.exitstatus})"
+    end
+  end
+end
+
+desc "create the disk image"
+task :disk_image, [:version] => [:package] do |t, args|
+  version = args[:version] 
+  cp 'LICENSE', DISK_IMAGE_DIR
+  cp 'README.md', DISK_IMAGE_DIR
+  image_name = "Lightroom Video Renderer Plugin #{version}.dmg"
+  volume_name = "Video Renderer Plugin"
+  sh %{hdiutil create "target/#{image_name}" -volname "#{volume_name}" -srcfolder "#{DISK_IMAGE_DIR}"}  do |ok, res|
+    if !ok
+      puts "disk image creation failed (status = #{res.exitstatus})"
+    end
+  end
+end
+
+desc "compress the target artifactory"
+task :compress, [:version] => [:package] do |t, args|
   version = args[:version] 
   sh %{cd target; zip Lightroom.Video.Renderer.#{args.version}.OSX.zip #{PLUGIN_NAME}/*} do |ok, res|
     if !ok
-      puts "zip failed (status = #{res.existatus})"
+      puts "zip failed (status = #{res.exitstatus})"
     end
   end
+  # TODO: add Readme.md to zip file
+  #cp 'README.md', PACKAGE_DIR
+  #cp 'LICENSE', PLUGIN_DIR
 end
 
 desc "build the plugin"
@@ -52,7 +86,7 @@ desc "create a release at github and upload the artifact"
   # puts `git tag #{args[:tagname]}` if !TASKENV.eql? "debug"
   # puts `git push --tags` if !TASKENV.eql? "debug"
 
-task :publish => [:compress] do
+task :publish, [:version] => [:disk_image] do
 ## create release
 #POST /repos/:owner/:repo/releases
 #{
