@@ -38,6 +38,11 @@ task :compile => :init do
   FileList['src/*.lua'].each {|f|
     cp f, PLUGIN_DIR
   } 
+  
+  # replace $version$ in Info.lua
+  infoFile = PLUGIN_DIR + '/Info.lua'
+  infoContent = File.read(infoFile).gsub!(/\$VERSION\$/, "#{version}")
+  File.open(infoFile, "w") { |f| f.puts infoContent }
 end
 
 desc "prepare the plugin"
@@ -46,9 +51,10 @@ task :plugin => [:compile, :resources] do
 end
 
 def version
-	`git describe --tags --long`
+	v = `git describe --tags --long`
+	v.sub! "-", "."
+	v.sub "\n", "" # strip undesired new line
 end
-
 
 desc "prepare the presets"
 task :presets do
