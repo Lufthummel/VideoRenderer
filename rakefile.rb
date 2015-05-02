@@ -2,6 +2,8 @@ require 'rake'
 require 'rake/clean'
 require 'fileutils'
 
+# dependencies: p7zip
+
 TARGET_DIR = 'target'
 PLUGIN_NAME = 'VideoRenderer.lrplugin'
 PLUGIN_DIR = TARGET_DIR + '/installer/' + PLUGIN_NAME
@@ -21,10 +23,9 @@ desc "create the necessary directories"
 task :init do
   directory PLUGIN_DIR
   mkdir_p PLUGIN_DIR
-  mkdir_p DISK_IMAGE_DIR
 end
 
-desc "copy all resources to the target folder"
+desc "copy all resources to the target plugin"
 task :resources => :init do
   cp 'src/ffmpeg', PLUGIN_DIR 
   cp 'LICENSE', PLUGIN_DIR
@@ -38,8 +39,13 @@ task :compile => :init do
   } 
 end
 
+desc "prepare the plugin"
+task :plugin, [:version] => [:compile, :resources] do
+  # 
+end
+
 desc "create the installer package"
-task :package, [:version] => [:compile, :resources] do |t, args|
+task :package, [:version] => :plugin do |t, args|
   version = args[:version] 
   sh %{pkgbuild --identifier "#{IDENTIFIER}" --version "#{version}" --install-location #{INSTALL_LOCATION} --root #{TARGET_DIR}/installer "#{PACKAGE_DIR}" }  do |ok, res|
     if !ok
@@ -51,6 +57,7 @@ end
 desc "create the disk image"
 task :disk_image, [:version] => [:package] do |t, args|
   version = args[:version] 
+  mkdir_p DISK_IMAGE_DIR
   cp 'LICENSE', DISK_IMAGE_DIR
   cp 'README.md', DISK_IMAGE_DIR
   image_name = "Lightroom Video Renderer Plugin #{version}.dmg"
@@ -62,8 +69,23 @@ task :disk_image, [:version] => [:package] do |t, args|
   end
 end
 
-desc "compress the target artifactory"
-task :compress, [:version] => [:package] do |t, args|
+desc "updates the ffmpeg version"
+task :ffmpeg_download do
+	# download static ffmpeg build for OSX
+	# http://evermeet.cx/ffmpeg/ffmpeg-2.6.2.7z
+	version = '2.6.2.7'
+	sh %{curl -O http://evermeet.cx/ffmpeg/ffmpeg-#{version}z} do |ok, res|
+		if !ok
+      		puts "ffmpeg download failed (status = #{res.exitstatus})"
+    	end
+	end
+	sh %{7za e ffmpeg-#{version}z}
+	rm "ffmpeg-#{version}z"
+	mv "ffmpeg", "src/ffmpeg"
+end
+
+desc "create a zip file containing the plugin"
+task :compress, [:version] => [:plugin] do |t, args|
   version = args[:version] 
   sh %{cd target; zip Lightroom.Video.Renderer.#{args.version}.OSX.zip #{PLUGIN_NAME}/*} do |ok, res|
     if !ok
@@ -73,13 +95,6 @@ task :compress, [:version] => [:package] do |t, args|
   # TODO: add Readme.md to zip file
   #cp 'README.md', PACKAGE_DIR
   #cp 'LICENSE', PLUGIN_DIR
-end
-
-desc "build the plugin"
-task :plugin, [:version] => :clean do |t, args|
-  version = args[:version] 
-  puts "Version #{version}"
-  Rake::Task[:compress].invoke(args.version)
 end
 
 desc "create a release at github and upload the artifact"
