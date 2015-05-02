@@ -253,11 +253,13 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
         local resizedFile = rendition.destinationPath 
         -- resizedFile = LrPathUtils.child(parent,string.format("%i_resized.jpg",i))
         
-        local command = string.format("convert \"%s\" " ..
+		local convertPath = LrPathUtils.child(_PLUGIN.path, "convert")
+        local command = string.format("\"%s\" \"%s\" " ..
         	"-resize 1920x1080^ " ..
         	"-gravity center " .. 
         	"-crop 1920x1080+0+0 +repage " .. 
         	"%s", 
+        	convertPath,
         	rendition.destinationPath,
         	rendition.destinationPath)
         myLogger:info(string.format("command: %s", command))
@@ -269,7 +271,7 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
     
     --progressScope:setCaption("Rendering Video")
     -- -b 320k # bit rate
-	local appPath = LrPathUtils.child(_PLUGIN.path, "ffmpeg")
+	local ffmpegPath = LrPathUtils.child(_PLUGIN.path, "ffmpeg")
     local outputPath = exportParams.LR_export_destinationPathPrefix
 	local filePattern = "\%05d.jpg" -- LrPathUtils.child
 	local codec = exportParams.codec -- default "libx264"
@@ -287,7 +289,7 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
 	local outputFile = exportParams.filename -- LrPathUtils.child
 	--local redirect = "1> ffmpeg.log 2>&1"
 	local command = string.format("\"%s\" -y -progress /tmp/status.txt -i %s/%s -c:v %s -r %s -vf %s -pix_fmt %s \"%s/%s\"", 
-		appPath, outputPath, filePattern, codec, frameRate, scale, pixelFormat, outputPath, outputFile)
+		ffmpegPath, outputPath, filePattern, codec, frameRate, scale, pixelFormat, outputPath, outputFile)
     myLogger:info(string.format("render command: %s", command))
     
 	myLogger:trace("starting ffmpeg process")

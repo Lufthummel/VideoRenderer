@@ -2,7 +2,9 @@ require 'rake'
 require 'rake/clean'
 require 'fileutils'
 
-# dependencies: p7zip
+# dependencies: 
+# gimli - sudo gem install gimli
+# p7zip - brew install p7zip
 
 TARGET_DIR = 'target'
 PLUGIN_NAME = 'VideoRenderer.lrplugin'
@@ -28,6 +30,7 @@ end
 desc "copy all resources to the target plugin"
 task :resources => :init do
   cp 'src/ffmpeg', PLUGIN_DIR 
+  cp 'src/convert', PLUGIN_DIR 
   cp 'LICENSE', PLUGIN_DIR
 end
 
@@ -50,7 +53,7 @@ end
 
 desc "create the installer package"
 task :package => :plugin do |t, args|
-  puts version
+  mkdir_p DISK_IMAGE_DIR
   sh %{pkgbuild --identifier "#{IDENTIFIER}" --version "#{version}" --install-location #{INSTALL_LOCATION} --root #{TARGET_DIR}/installer "#{PACKAGE_DIR}" }  do |ok, res|
     if !ok
       puts "pkg creation failed (status = #{res.exitstatus})"
@@ -58,11 +61,16 @@ task :package => :plugin do |t, args|
   end
 end
 
+desc "generate the documentation"
+task :documentation do
+	sh %{gimli -f README.md -outputfilename "target/Read Me"}
+end
+
 desc "create the disk image"
-task :disk_image => [:package] do |t, args|
+task :disk_image => [:package,:documentation] do |t, args|
   mkdir_p DISK_IMAGE_DIR
   cp 'LICENSE', DISK_IMAGE_DIR
-  cp 'README.md', DISK_IMAGE_DIR
+  cp 'target/Read Me.pdf', DISK_IMAGE_DIR
   image_name = "Lightroom Video Renderer Plugin #{version}.dmg"
   volume_name = "Video Renderer Plugin"
   sh %{hdiutil create "target/#{image_name}" -volname "#{volume_name}" -srcfolder "#{DISK_IMAGE_DIR}"}  do |ok, res|
@@ -85,6 +93,18 @@ task :ffmpeg_download do
 	sh %{7za e ffmpeg-#{ffmpeg_version}z}
 	rm "ffmpeg-#{ffmpeg_version}z"
 	mv "ffmpeg", "src/ffmpeg"
+end
+
+desc "updates the imagemagick binary"
+task :imagemagick_download do
+	sh %{curl -O http://www.imagemagick.org/download/binaries/ImageMagick-x86_64-apple-darwin14.0.0.tar.gz} do |ok, res|
+		if !ok
+      		puts "imagemagick download failed (status = #{res.exitstatus})"
+    	end
+	end
+	sh %{tar xzvf ImageMagick-x86_64-apple-darwin14.0.0.tar.gz}
+	cp "ImageMagick-6.9.0/bin/convert" "src/"
+	rm "ImageMagick-x86_64-apple-darwin14.0.0.tar.gz"
 end
 
 desc "create a zip file containing the plugin"
