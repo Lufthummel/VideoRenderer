@@ -40,13 +40,17 @@ task :compile => :init do
 end
 
 desc "prepare the plugin"
-task :plugin, [:version] => [:compile, :resources] do
+task :plugin => [:compile, :resources] do
   # 
 end
 
+def version
+	`git describe --tags --long`
+end
+
 desc "create the installer package"
-task :package, [:version] => :plugin do |t, args|
-  version = args[:version] 
+task :package => :plugin do |t, args|
+  puts version
   sh %{pkgbuild --identifier "#{IDENTIFIER}" --version "#{version}" --install-location #{INSTALL_LOCATION} --root #{TARGET_DIR}/installer "#{PACKAGE_DIR}" }  do |ok, res|
     if !ok
       puts "pkg creation failed (status = #{res.exitstatus})"
@@ -55,8 +59,7 @@ task :package, [:version] => :plugin do |t, args|
 end
 
 desc "create the disk image"
-task :disk_image, [:version] => [:package] do |t, args|
-  version = args[:version] 
+task :disk_image => [:package] do |t, args|
   mkdir_p DISK_IMAGE_DIR
   cp 'LICENSE', DISK_IMAGE_DIR
   cp 'README.md', DISK_IMAGE_DIR
@@ -69,25 +72,24 @@ task :disk_image, [:version] => [:package] do |t, args|
   end
 end
 
-desc "updates the ffmpeg version"
+desc "updates the ffmpeg binary"
 task :ffmpeg_download do
 	# download static ffmpeg build for OSX
 	# http://evermeet.cx/ffmpeg/ffmpeg-2.6.2.7z
-	version = '2.6.2.7'
-	sh %{curl -O http://evermeet.cx/ffmpeg/ffmpeg-#{version}z} do |ok, res|
+	ffmpeg_version = '2.6.2.7'
+	sh %{curl -O http://evermeet.cx/ffmpeg/ffmpeg-#{ffmpeg_version}z} do |ok, res|
 		if !ok
       		puts "ffmpeg download failed (status = #{res.exitstatus})"
     	end
 	end
-	sh %{7za e ffmpeg-#{version}z}
-	rm "ffmpeg-#{version}z"
+	sh %{7za e ffmpeg-#{ffmpeg_version}z}
+	rm "ffmpeg-#{ffmpeg_version}z"
 	mv "ffmpeg", "src/ffmpeg"
 end
 
 desc "create a zip file containing the plugin"
-task :compress, [:version] => [:plugin] do |t, args|
-  version = args[:version] 
-  sh %{cd target; zip Lightroom.Video.Renderer.#{args.version}.OSX.zip #{PLUGIN_NAME}/*} do |ok, res|
+task :compress => [:plugin] do |t, args|
+  sh %{cd target; zip Lightroom.Video.Renderer.#{version}.OSX.zip #{PLUGIN_NAME}/*} do |ok, res|
     if !ok
       puts "zip failed (status = #{res.exitstatus})"
     end
@@ -101,7 +103,7 @@ desc "create a release at github and upload the artifact"
   # puts `git tag #{args[:tagname]}` if !TASKENV.eql? "debug"
   # puts `git push --tags` if !TASKENV.eql? "debug"
 
-task :publish, [:version] => [:disk_image] do
+task :publish => [:disk_image] do
 ## create release
 #POST /repos/:owner/:repo/releases
 #{
