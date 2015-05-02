@@ -73,6 +73,7 @@ exportServiceProvider.sectionsForTopOfDialog = function ( f , propertyTable )
 		{
 			title = 'Information',
 			f:column {
+				f:static_text {title = 'Video Renderer Plugin'},
 				f:static_text {title = 'Author: Andreas Hermann <a.v.hermann@gmail.com>'},
 				f:spacer {height = 10},
 				f:static_text {title = 'This plugin includes these third-party tools:'},
@@ -237,8 +238,10 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
     
     local numPhotos = exportSession:countRenditions()
     local progressScope = exportContext:configureProgress({
-      title = LOC("$$$/VideoRenderer/ProgressExport=Exporting ^1 Images for Video Renderer", numPhotos)
+      title = LOC("$$$/VideoRenderer/ProgressExport=Video Renderer")
+      --title = LOC("$$$/VideoRenderer/ProgressExport=Video Renderer exports ^1 Images", numPhotos)
     })
+    progressScope:setCaption("Exporting Photos")
     
     local files = {}
     numFiles = 0
@@ -269,7 +272,6 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
       end
     end
     
-    --progressScope:setCaption("Rendering Video")
     -- -b 320k # bit rate
 	local ffmpegPath = LrPathUtils.child(_PLUGIN.path, "ffmpeg")
     local outputPath = exportParams.LR_export_destinationPathPrefix
@@ -292,24 +294,25 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
 		ffmpegPath, outputPath, filePattern, codec, frameRate, scale, pixelFormat, outputPath, outputFile)
     myLogger:info(string.format("render command: %s", command))
     
-	myLogger:trace("starting ffmpeg process")
-    --result = LrTasks.execute(command)
-    local renderProgress = LrProgressScope({
-      parent = progressScope,
-      parentEndRange = 1,
-      caption = LOC("$$$/VideoRenderer/ProgressExport=Rendering ^1 Frames", numPhotos),
-      functionContext = functionContext
-    })
+	myLogger:trace("starting ffmpeg command")
+	progressScope:setCaption("Rendering Video")
+    result = LrTasks.execute(command)
+    myLogger:trace(string.format("ffmpeg finished with exit code: %d", result))
     
-    io.open("/tmp/status.txt", "w"):close() -- touch to ensure file exists
-    LrTasks.startAsyncTask(function ()
-    	renderProgress:setPortionComplete(0,nil)
-		local result = LrTasks.execute(command)
-    	myLogger:trace(string.format("ffmpeg finished with exit code: %d", result))
-    	renderProgress:setPortionComplete(1,nil)
-   		renderProgress:done()
-	end, "rendererTask")
-    
+    --local renderProgress = LrProgressScope({
+    -- parent = progressScope,
+    --  parentEndRange = 1,
+    --  caption = LOC("$$$/VideoRenderer/ProgressExport=Rendering ^1 Frames", numPhotos),
+    --  functionContext = functionContext
+    --})
+    --io.open("/tmp/status.txt", "w"):close() -- touch to ensure file exists
+    --LrTasks.startAsyncTask(function ()
+    --	renderProgress:setPortionComplete(0,nil)
+	--	local result = LrTasks.execute(command)
+    --	myLogger:trace(string.format("ffmpeg finished with exit code: %d", result))
+    --	renderProgress:setPortionComplete(1,nil)
+   	--	renderProgress:done()
+	--end, "rendererTask")
     --fh,err = io.open("/tmp/status.txt","r")
     --if err then myLogger:error("Could not open file /tmp/status.txt" .. err); return; end
     --while true do
@@ -322,9 +325,9 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
     --    if (renderProgress:isDone()) then break end
     --end
     --fh:close()
-    io.delete("/tmp/status.txt")
+    --io.delete("/tmp/status.txt")
     
-    --progressScope:done()
+    progressScope:done()
 end
 
 return exportServiceProvider

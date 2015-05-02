@@ -23,7 +23,7 @@ return {
 	LrSdkVersion = 3.0,
 	LrSdkMinimumVersion = 1.3, -- minimum SDK version required by this plug-in
 
-	LrToolkitIdentifier = 'com.lightroomgoodies.videorenderer',
+	LrToolkitIdentifier = 'ch.andyhermann.videorenderer',
 
 	LrPluginName = LOC "$$$/VideoRenderer/PluginName=Video Renderer",
 	

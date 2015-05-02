@@ -7,15 +7,13 @@ require 'fileutils'
 # p7zip - brew install p7zip
 
 TARGET_DIR = 'target'
-PLUGIN_NAME = 'VideoRenderer.lrplugin'
-PLUGIN_DIR = TARGET_DIR + '/installer/' + PLUGIN_NAME
-DISK_IMAGE_DIR = TARGET_DIR + '/disk_image/'
-PACKAGE_NAME = 'Lightroom Video Renderer Plugin.pkg'
-PACKAGE_DIR = DISK_IMAGE_DIR + PACKAGE_NAME
 CLEAN.include(TARGET_DIR)
 
+PLUGIN_NAME = 'VideoRenderer.lrplugin'
+PLUGIN_DIR = TARGET_DIR + '/installer/Modules/' + PLUGIN_NAME
+PACKAGE_NAME = 'Lightroom Video Renderer Plugin.pkg'
 IDENTIFIER = 'ch.andyhermann.videorenderer'
-INSTALL_LOCATION = '~/Library/Application\ Support/Adobe/Lightroom/Modules/'
+LIGHTROOM_SUPPORT = '~/Library/Application\ Support/Adobe/Lightroom'
 
 task :test do
   puts "Running unit tests"
@@ -51,10 +49,20 @@ def version
 	`git describe --tags --long`
 end
 
+
+desc "prepare the presets"
+task :presets do
+  PRESETS_DIR = TARGET_DIR + '/installer/Export Presets/Video Renderer'
+  mkdir_p PRESETS_DIR
+  FileList['presets/*'].each {|f|
+    cp f, PRESETS_DIR
+  }
+end
+
 desc "create the installer package"
-task :package => :plugin do |t, args|
-  mkdir_p DISK_IMAGE_DIR
-  sh %{pkgbuild --identifier "#{IDENTIFIER}" --version "#{version}" --install-location #{INSTALL_LOCATION} --root #{TARGET_DIR}/installer "#{PACKAGE_DIR}" }  do |ok, res|
+task :package => [:plugin, :presets] do |t, args|
+  PACKAGE_DIR = TARGET_DIR + '/' + PACKAGE_NAME
+  sh %{pkgbuild --identifier "#{IDENTIFIER}" --version "#{version}" --install-location #{LIGHTROOM_SUPPORT} --root #{TARGET_DIR}/installer "#{PACKAGE_DIR}" }  do |ok, res|
     if !ok
       puts "pkg creation failed (status = #{res.exitstatus})"
     end
@@ -68,9 +76,11 @@ end
 
 desc "create the disk image"
 task :disk_image => [:package,:documentation] do |t, args|
+  DISK_IMAGE_DIR = TARGET_DIR + '/disk_image/'
   mkdir_p DISK_IMAGE_DIR
+  cp TARGET_DIR + '/' + PACKAGE_NAME, DISK_IMAGE_DIR
   cp 'LICENSE', DISK_IMAGE_DIR
-  cp 'target/Read Me.pdf', DISK_IMAGE_DIR
+  cp TARGET_DIR + '/Read Me.pdf', DISK_IMAGE_DIR
   image_name = "Lightroom Video Renderer Plugin #{version}.dmg"
   volume_name = "Video Renderer Plugin"
   sh %{hdiutil create "target/#{image_name}" -volname "#{volume_name}" -srcfolder "#{DISK_IMAGE_DIR}"}  do |ok, res|
@@ -141,6 +151,14 @@ task :publish => [:disk_image] do
 
 #POST https://<upload_url>/repos/:owner/:repo/releases/:id/assets?name=foo.zip
 #Content-Type application/zip
+
+# https://developer.github.com/changes/2013-09-25-releases-api/
+# https://gist.github.com/caspyin/2288960
+#curl -H "Authorization: token TOKEN" \
+#     -H "Accept: application/vnd.github.manifold-preview" \
+#     -H "Content-Type: application/zip" \
+#     --data-binary @build/mac/package.zip \
+#     "https://uploads.github.com/repos/hubot/singularity/releases/123/assets?name=1.0.0-mac.zip"
 end
 
 task :release => [:compile, :resources, :compress, :publish] do
