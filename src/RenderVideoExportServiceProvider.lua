@@ -6,6 +6,9 @@ local LrFileUtils = import("LrFileUtils")
 local LrPathUtils = import("LrPathUtils")
 local LrTasks = import("LrTasks")
 local LrLogger = import("LrLogger")
+local LrProgressScope = import("LrProgressScope")
+local LrColor = import("LrColor")
+local LrHttp = import("LrHttp")
 
 local prefs = import("LrPrefs").prefsForPlugin() -- plugins own preferences
 local myLogger = LrLogger("VideoRenderer")
@@ -65,6 +68,34 @@ exportServiceProvider.startDialog = function ( propertyTable )
 	
 end
 
+exportServiceProvider.sectionsForTopOfDialog = function ( f , propertyTable )
+	return {
+		{
+			title = 'Information',
+			f:column {
+				f:static_text {title = 'Author: Andreas Hermann <a.v.hermann@gmail.com>'},
+				f:spacer {height = 10},
+				f:static_text {title = 'This plugin includes these third-party tools:'},
+				f:row {
+					f:static_text {title = '- ffmpeg'},
+					f:static_text {
+						title = 'https://www.ffmpeg.org/',
+						mouse_down = function() LrHttp.openUrlInBrowser('https://www.ffmpeg.org/') end,
+						text_color = LrColor( 0, 0, 1 )
+					}
+				},
+				f:row {
+					f:static_text {title = '- ImageMagick®'},
+					f:static_text {
+						title = 'http://www.imagemagick.org/',
+						mouse_down = function() LrHttp.openUrlInBrowser('http://www.imagemagick.org/') end,
+						text_color = LrColor( 0, 0, 1 )
+					}
+				}
+			}
+		}
+	}
+end
 
 exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 
@@ -73,13 +104,39 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 	local f = LrView.osFactory()
 	local bind = LrView.bind
 	local share = LrView.share
+	
+	--local photo = catalog:getTargetPhoto()
+	--photo:requestJpegThumbnail(320,240,function(data,err)
+	--	
+	--end)
+	--local dim = photo:getRawMetadata("croppedDimensions")
+	--local aspect = aspectRatio
+	local catalog = LrApplication.activeCatalog()
+	local targetPhoto = catalog:getTargetPhoto()
+	
+	-- needs to run in LrTask
+	--local croppedDimensions = ".x."
+	--LrTasks.startAsyncTask(function() 
+	--	croppedDimensions = targetPhoto:getFormattedMetadata("croppedDimensions")
+	--end)
 
 	local result = {
-	
 		{
-			title = LOC "$$$/VideoRenderer/ExportDialog/VideoSettings=Video Settings",
-			
+			title = LOC "$$$/VideoRenderer/ExportDialog/VideoSettings=Render Settings",
 			synopsis = bind { key = 'fullPath', object = propertyTable },
+			
+			--f:row {
+			--	f:static_text {
+			--		title = LOC "$$$/VideoRenderer/ExportDialog/Size=Original Image:",
+			--		alignment = 'right',
+			--		width = share 'leftLabel',
+			--	},
+			--	f:catalog_photo({
+			--		photo = targetPhoto,
+			--		width = 320,
+			--		height = 240,
+			--	})
+			--},
 			
 			f:row {
 				f:static_text {
@@ -101,18 +158,17 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 					-- Widescreen 16:9: 640x360, 800x450, 960x540, 1024x576, 1280x720, and 1920x1080
 				},
 				
-				f:static_text {
-					title = LOC "$$$/VideoRenderer/ExportDialog/SourceSizeLabel=Source:",
-					alignment = 'right',
-					width = share 'leftLabel',
-				},
-				
-				f:static_text {
-					title = LOC "$$$/VideoRenderer/ExportDialog/SourceSizeValue=5184x3136",
-					alignment = 'right',
-					width = share 'leftLabel',
-					-- LrPhotoInfo(path) : width, height
-				},
+				--f:static_text {
+				--	title = LOC "$$$/VideoRenderer/ExportDialog/SourceSizeLabel=Source:",
+				--	alignment = 'right',
+				--	width = share 'leftLabel',
+				--},
+				--
+				--f:static_text {
+				--	title = croppedDimensions,
+				--	alignment = 'right',
+				--	width = share 'leftLabel'
+				--},
 			},
 			
 			f:row {
@@ -127,8 +183,8 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 					items = {
 						{ value = 'libx264', title = "H.264" },
 						--{ value = 'libx265', title = "H265/HVEC (Experimental)" },
-						{ value = 'prores', title = "Apple ProRes" },
-						{ value = 'gif', title = "GIF" },
+						--{ value = 'prores', title = "Apple ProRes" },
+						--{ value = 'gif', title = "GIF" },
     					-- extensionForFormat
 					},
 				},
@@ -165,8 +221,8 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 					immediate = true,
 					fill_horizontal = 1,
 				},
-			},
-		},
+			}
+		}
 	}
 	
 	return result
@@ -183,19 +239,6 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
     local progressScope = exportContext:configureProgress({
       title = LOC("$$$/VideoRenderer/ProgressExport=Exporting ^1 Images for Video Renderer", numPhotos)
     })
-    
-    for photo in exportSession:photosToExport() do
-    	-- (do something with photo)
-    	--photo:getDevelopSettings()
---LuminanceAdjustmentAque: (number)
---LuminanceAdjustmentBlue: (number)
---LuminanceAdjustmentGreen: (number)
---LuminanceAdjustmentMagenta: (number)
---LuminanceAdjustmentOrange: (number)
---LuminanceAdjustmentPurple: (number)
---LuminanceAdjustmentRed: (number)
---LuminanceAdjustmentYellow: (number)
-    end
     
     local files = {}
     numFiles = 0
@@ -224,7 +267,7 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
       end
     end
     
-    progressScope:setCaption("Rendering Video")
+    --progressScope:setCaption("Rendering Video")
     -- -b 320k # bit rate
 	local appPath = LrPathUtils.child(_PLUGIN.path, "ffmpeg")
     local outputPath = exportParams.LR_export_destinationPathPrefix
@@ -243,13 +286,43 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
 	local pixelFormat = "yuv420p"
 	local outputFile = exportParams.filename -- LrPathUtils.child
 	--local redirect = "1> ffmpeg.log 2>&1"
-	local command = string.format("\"%s\" -y -i %s/%s -c:v %s -r %s -vf %s -pix_fmt %s \"%s/%s\"", 
+	local command = string.format("\"%s\" -y -progress /tmp/status.txt -i %s/%s -c:v %s -r %s -vf %s -pix_fmt %s \"%s/%s\"", 
 		appPath, outputPath, filePattern, codec, frameRate, scale, pixelFormat, outputPath, outputFile)
-    myLogger:info(string.format("command: %s", command))
-    result = LrTasks.execute(command)
-    myLogger:trace(string.format("ffmpeg result: %d", result))
+    myLogger:info(string.format("render command: %s", command))
     
-    progressScope:done()
+	myLogger:trace("starting ffmpeg process")
+    --result = LrTasks.execute(command)
+    local renderProgress = LrProgressScope({
+      parent = progressScope,
+      parentEndRange = 1,
+      caption = LOC("$$$/VideoRenderer/ProgressExport=Rendering ^1 Frames", numPhotos),
+      functionContext = functionContext
+    })
+    
+    io.open("/tmp/status.txt", "w"):close() -- touch to ensure file exists
+    LrTasks.startAsyncTask(function ()
+    	renderProgress:setPortionComplete(0,nil)
+		local result = LrTasks.execute(command)
+    	myLogger:trace(string.format("ffmpeg finished with exit code: %d", result))
+    	renderProgress:setPortionComplete(1,nil)
+   		renderProgress:done()
+	end, "rendererTask")
+    
+    --fh,err = io.open("/tmp/status.txt","r")
+    --if err then myLogger:error("Could not open file /tmp/status.txt" .. err); return; end
+    --while true do
+    --	line = fh:read()
+    --    if line == nil then break end
+    --    myLogger:trace("status.txt: " .. line)
+    --    if string.find(line,"frame") then
+    --            --myLogger:trace(line)
+    --    end
+    --    if (renderProgress:isDone()) then break end
+    --end
+    --fh:close()
+    io.delete("/tmp/status.txt")
+    
+    --progressScope:done()
 end
 
 return exportServiceProvider
