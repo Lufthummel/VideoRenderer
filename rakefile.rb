@@ -34,7 +34,7 @@ task :resources => :init do
 end
 
 desc "compile the lua code"
-task :compile => [:init, :test] do
+task :compile => [:init] do
   # TODO: really compile code!
   FileList['src/*.lua'].each {|f|
     cp f, PLUGIN_DIR
