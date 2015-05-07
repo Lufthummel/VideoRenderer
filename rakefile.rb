@@ -40,9 +40,9 @@ task :compile => :init do
   } 
   
   # replace $version$ in Info.lua
-  infoFile = PLUGIN_DIR + '/Info.lua'
-  infoContent = File.read(infoFile).gsub!(/\$VERSION\$/, "#{version}")
-  File.open(infoFile, "w") { |f| f.puts infoContent }
+  #infoFile = PLUGIN_DIR + '/Info.lua'
+  #infoContent = File.read(infoFile).gsub!(/\$VERSION\$/, "#{version}")
+  #File.open(infoFile, "w") { |f| f.puts infoContent }
 end
 
 desc "prepare the plugin"

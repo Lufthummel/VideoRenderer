@@ -40,7 +40,7 @@ return {
 		file = 'RenderVideoExportServiceProvider.lua',
 	},
 	
-	VERSION = "$VERSION$",
+	VERSION = { major=1, minor=0, revision=0, build=0, },
 
 }
 
