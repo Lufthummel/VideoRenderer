@@ -32,3 +32,4 @@ These open source technologies are used:
 
 - ffmpeg: LGPL 2.1 license
 - imagemagick: Apache 2.0 license
+- lua JSON implementation: Creative Commons

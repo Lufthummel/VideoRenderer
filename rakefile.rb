@@ -16,7 +16,8 @@ IDENTIFIER = 'ch.andyhermann.videorenderer'
 LIGHTROOM_SUPPORT = '~/Library/Application\ Support/Adobe/Lightroom'
 
 task :test do
-  puts "Running unit tests"
+  puts "Running tests"
+  sh %{busted test/*.lua}
 end
 
 desc "create the necessary directories"
@@ -33,7 +34,7 @@ task :resources => :init do
 end
 
 desc "compile the lua code"
-task :compile => :init do
+task :compile => [:init, :test] do
   # TODO: really compile code!
   FileList['src/*.lua'].each {|f|
     cp f, PLUGIN_DIR

@@ -1,7 +1,7 @@
 local LrHttp = import "LrHttp"
 local LrLogger = import "LrLogger"
 local LrTasks = import "LrTasks"
-local LrPathUtils = import("LrPathUtils")
+local LrPathUtils = import "LrPathUtils"
 JSON = loadfile(LrPathUtils.child(_PLUGIN.path, "JSON.lua"))()
 local Info = require("Info")
 
