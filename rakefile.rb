@@ -52,7 +52,7 @@ task :plugin => [:compile, :resources] do
 end
 
 def version
-	v = `git describe --tags --long`
+	v = `git describe --long`
 	v.sub! "-", "."
 	v.sub "\n", "" # strip undesired new line
 end
