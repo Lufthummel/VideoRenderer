@@ -9,9 +9,13 @@ local LrLogger = import("LrLogger")
 local LrProgressScope = import("LrProgressScope")
 local LrColor = import("LrColor")
 local LrHttp = import("LrHttp")
+local LrColor = import("LrColor")
+local LrView = import 'LrView'
+
+local Info = require("Info")
 
 local prefs = import("LrPrefs").prefsForPlugin() -- plugins own preferences
-local myLogger = LrLogger("VideoRenderer")
+local myLogger = LrLogger("VideoRenderer2")
 --myLogger:enable("logfile")
 myLogger:enable("print")
 
@@ -22,10 +26,10 @@ local dialogs = require("dialogs")
 
 local exportServiceProvider = {}
 
-exportServiceProvider.allowFileFormats = { 'JPEG' }
+exportServiceProvider.allowFileFormats = { 'JPEG','TIFF' }
 exportServiceProvider.allowColorSpaces = { 'sRGB' }
-exportServiceProvider.showSections = { 'exportLocation' }
--- exportServiceProvider.canExportToTemporaryLocation = true
+exportServiceProvider.showSections = { 'exportLocation','fileSettings','watermarking' }
+exportServiceProvider.canExportToTemporaryLocation = true
 
 exportServiceProvider.updateExportSettings = function ( exportSettings )
 
@@ -48,15 +52,97 @@ exportServiceProvider.exportPresetFields = {
 		{ key = 'codec', default = 'libx264' },
 		{ key = 'container', default = 'mp4' },
 		{ key = 'size', default = '1920x1080' },
+		{ key = 'cropToFit', default = true },
 		{ key = 'framerate', default = '30' },
-		{ key = 'pixelFormat', default = 'yuv420p' },
+		{ key = 'pixelFormat', default = 'yuv420p' }, -- yuv420p|yuv444p|yuv410p, yuvj420p|yuvj444p?
+		-- prores --> 'yuv422p10le'
+		-- h264 profiles: baseline main high high10 high422 high444
+		-- prores profiles: 1,2,3
 		-- -aspect aspect      set aspect ratio (4:3, 16:9 or 1.3333, 1.7777)
+		{ key = 'deleteAfterRendering', default = true },
 }
 
 exportServiceProvider.startDialog = function ( propertyTable )
-	myLogger:trace("startDialog")
-	--local updateChecker = require('UpdateChecker')
-	--updateChecker.check()
+	--myLogger:trace("startDialog")
+	local LrView = import 'LrView'
+	local f = LrView.osFactory()
+	
+	local catalog = LrApplication.activeCatalog()
+	local photos = catalog:getTargetPhotos()
+	
+	--local c1 = f:scrolled_view {
+	--	horizontal_scroller = false,
+	--	width = 600,
+	--	background_color = LrColor(0.3, 0.3, 0.3),
+	--}
+	
+	local c = f:column {
+			place_vertical = 0.5,
+	
+			f:row {
+				f:static_text({ title = "Photo" }),
+				f:static_text({ title = "Exposure" })
+			},
+			f:row {
+				f:catalog_photo({ 
+					photo = photos[1]
+				}),
+				f:static_text({ title = "Photo 1" }),
+				f:static_text({ title = "0.5" })
+			},
+			f:row {
+				f:catalog_photo({ 
+					photo = photos[2]
+				}),
+				f:group_box {
+					title = "Slider Two",
+					font = "<system>",
+					f:edit_field {
+						place_horizontal = 0.5,
+						value = LrView.bind( "sliderOne" ),
+						width_in_digits = 7
+					}
+				}
+			}
+		}
+	
+	--tprint(c._children[1],0)
+	--for i=1,10 do
+	-- 
+	table.insert(c._children, f:row {
+				f:group_box {
+					title = "Slider Four",
+					font = "<system>",
+					f:edit_field {
+						place_horizontal = 0.5,
+						value = LrView.bind( "sliderThree" ),
+						width_in_digits = 7
+					}
+				}
+			})
+	-- end
+	
+	--LrDialogs.presentModalDialog {
+	--	title = "Exposure Analysis",
+	--	contents = c
+	--}
+end
+
+-- Print contents of `tbl`, with indentation.
+-- `indent` sets the initial level of indentation.
+function tprint (tbl, indent)
+  if not indent then indent = 0 end
+  for k, v in pairs(tbl) do
+    formatting = string.rep("  ", indent) .. k .. ": "
+    if type(v) == "table" then
+      myLogger:info(formatting)
+      --tprint(v, indent+1)
+    elseif type(v) == 'boolean' then
+      myLogger:info(formatting .. tostring(v))      
+    else
+      myLogger:info(formatting .. v)
+    end
+  end
 end
 
 exportServiceProvider.sectionsForTopOfDialog = function ( f , propertyTable )
@@ -64,7 +150,7 @@ exportServiceProvider.sectionsForTopOfDialog = function ( f , propertyTable )
 		{
 			title = 'Information',
 			f:column {
-				f:static_text {title = 'Video Renderer Plugin'},
+				f:static_text {title = 'Video Renderer Plugin ' .. Info.VERSION.string },
 				f:static_text {title = 'Author: Andreas Hermann <a.v.hermann@gmail.com>'},
 				f:spacer {height = 10},
 				f:static_text {title = 'This plugin includes these third-party tools:'},
@@ -90,8 +176,6 @@ exportServiceProvider.sectionsForTopOfDialog = function ( f , propertyTable )
 end
 
 exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
-
-	local LrView = import 'LrView'
 
 	local f = LrView.osFactory()
 	local bind = LrView.bind
@@ -132,7 +216,7 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 		
 			f:row {
 				f:static_text {
-					title = LOC "$$$/VideoRenderer/ExportDialog/Size=Size:",
+					title = LOC "$$$/VideoRenderer/ExportDialog/Size=Format:",
 					alignment = 'right',
 					width = share 'leftLabel',
 				},
@@ -140,32 +224,36 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 				f:popup_menu {
 					value = bind 'size',
 					items = {
-						{ value = '3840x2160', title = "4K - 3840x2160" },
-						{ value = '2704x1524', title = "2.7K - 2704x1524" },
-						{ value = '1920x1080', title = "Full HD - 1920x1080" },
-						{ value = '1280x720', title = "HD - 1280x720" },
-						{ value = '640x480', title = "VGA - 640x480" },
+						--{ value = '3840x2160', title = "4K" },
+						--{ value = '2048x1024', title = "2K - 2048x1024" },
+						{ value = '1920x1080', title = "1080p HD" },
+						{ value = '1280x720', title = "720p HD" },
+						--{ value = '720x576', title = "PAL SD - 720x576" },
+						--{ value = '720x480', title = "NTSC SD - 720x480" },
 					},
 					-- Standard 4:3: 320x240, 640x480, 800x600, 1024x768
 					-- Widescreen 16:9: 640x360, 800x450, 960x540, 1024x576, 1280x720, and 1920x1080
 				},
+			},
 			
-				--f:static_text {
-				--	title = LOC "$$$/VideoRenderer/ExportDialog/SourceSizeLabel=Source:",
-				--	alignment = 'right',
-				--	width = share 'leftLabel',
-				--},
-				--
-				--f:static_text {
-				--	title = croppedDimensions,
-				--	alignment = 'right',
-				--	width = share 'leftLabel'
-				--},
+			f:row {
+				f:static_text {
+					title = "",
+					width = share 'leftLabel',
+				},
+				
+				f:checkbox {
+					value = bind 'cropToFit',
+				},
+			
+				f:static_text {
+					title = LOC "$$$/VideoRenderer/ExportDialog/CropLabel=Crop To Fit",
+				},
 			},
 		
 			f:row {
 				f:static_text {
-					title = LOC "$$$/VideoRenderer/ExportDialog/Codec=Video Format:",
+					title = LOC "$$$/VideoRenderer/ExportDialog/Codec=Video Codec:",
 					alignment = 'right',
 					width = share 'leftLabel',
 				},
@@ -174,8 +262,7 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 					value = bind 'codec',
 					items = {
 						{ value = 'libx264', title = "H.264" },
-						--{ value = 'libx265', title = "H265/HVEC (Experimental)" },
-						--{ value = 'prores', title = "Apple ProRes" },
+						{ value = 'prores', title = "Apple ProRes" },
 						--{ value = 'gif', title = "GIF" },
 						-- extensionForFormat
 					},
@@ -192,10 +279,14 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 				f:popup_menu {
 					value = bind 'framerate',
 					items = {
+						{ value = '23.98', title = "23.98 Frames/s" },
+						{ value = '24', title = "24 Frames/s" },
 						{ value = '25', title = "25 Frames/s" },
+						{ value = '29.97', title = "29.97 Frames/s" },
 						{ value = '30', title = "30 Frames/s" },
-						{ value = '48', title = "48 Frames/s" },
-						{ value = '60', title = "60 Frames/s" },
+						--{ value = '50', title = "50 Frames/s" },
+						--{ value = '59.94', title = "59.94 Frames/s" },
+						--{ value = '60', title = "60 Frames/s" },
 					},
 				},
 			},
@@ -213,11 +304,34 @@ exportServiceProvider.sectionsForBottomOfDialog = function ( _, propertyTable )
 					immediate = true,
 					fill_horizontal = 1,
 				},
-			}
+			},
+		
+			--f:row {
+			--	f:checkbox {
+			--		value = bind 'deleteAfterRendering',
+			--		alignment = 'right',
+			--	},
+			--	
+			--	f:static_text {
+			--		title = LOC "$$$/VideoRenderer/ExportDialog/KeepImages=Delete exported frames after rendering.",
+			--		alignment = 'right',
+			--	},
+			--}
 		}
 	}
 
 	return result
+end
+
+function exportServiceProvider.postProcessRenderedPhotos ( functionContext, filterContext )
+	local renditionOptions = {
+		plugin = _PLUGIN,
+		renditionToSatisfy = filterContext.renditionToSatisfy,
+		filterSettings = function (renditionToSatisfy, exportSettings) 
+			-- hook to change render settings
+			-- e.g. exportSettings.LR_format = TIFF
+		end
+	}
 end
 
 function exportServiceProvider.processRenderedPhotos( functionContext, exportContext )
@@ -240,17 +354,15 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
       if progressScope:isCanceled() then
         break
       end
-      if success then
+      if success and exportParams.cropToFit then
         numFiles = numFiles + 1
         local parent = LrPathUtils.parent(rendition.destinationPath)
-        local resizedFile = rendition.destinationPath 
-        -- resizedFile = LrPathUtils.child(parent,string.format("%i_resized.jpg",i))
-        
+        local resizedFile = rendition.destinationPath
 		local convertPath = LrPathUtils.child(_PLUGIN.path, "convert")
         local command = string.format("\"%s\" \"%s\" " ..
-        	"-resize 1920x1080^ " ..
+        	"-resize " .. exportParams.size .. "^ " ..
         	"-gravity center " .. 
-        	"-crop 1920x1080+0+0 +repage " .. 
+        	"-crop " .. exportParams.size .. "+0+0 +repage " .. 
         	"%s", 
         	convertPath,
         	rendition.destinationPath,
@@ -263,16 +375,35 @@ function exportServiceProvider.processRenderedPhotos( functionContext, exportCon
     end
     
     local outputPath = exportParams.LR_export_destinationPathPrefix
+    
     local inputPattern = outputPath .. "/" .. "%05d.jpg"
+    -- TODO: find out sub folder setting
+    --if exportParams.LR_export_useSubfolder then
+    --	inputPattern = inputPattern .. LR_export_destination
+    --end
+    --inputPattern = inputPattern .. "%05d.jpg"
+    
 	local outputFile = outputPath .. "/" .. exportParams.filename
 	local renderParameters = {
 		codec = exportParams.codec, -- default "libx264"
 		frameRate = exportParams.framerate, -- default "30"
-		scale = "scale=-1:1080",
 		pixelFormat = "yuv420p"
 	}
+	
+	if (exportParams.size == "1920x1080") then
+		renderParameters.scale = "scale=-1:1080"
+	elseif (exportParams.size == "3840x2160") then
+		renderParameters.scale = "scale=-1:2160"
+	end
+	
+	if (exportParams.codec == "prores") then
+		renderParameters.pixelFormat = "yuv422p10le"
+	elseif (exportParams.codec == "libx264") then
+		renderParameters.pixelFormat = "yuv420p"
+	end
     
-    --ffmpeg.renderVideo(inputPattern, outputFile, renderParameters)
+    --ffmpeg.renderVideo(inputPattern, outputFile, renderParameters, progressScope)
+    progressScope:setCaption("Rendering Video")
 	render(inputPattern, outputFile, renderParameters)
     
     progressScope:done()
@@ -280,14 +411,35 @@ end
 
 function render( inputPattern, outputFile, params )
 	local ffmpegPath = LrPathUtils.child(_PLUGIN.path, "ffmpeg")
-	local command = string.format("\"%s\" -y -progress /tmp/status.txt -i %s -c:v %s -r %s -vf %s -pix_fmt %s \"%s\" 2>/dev/null", 
-		ffmpegPath, inputPattern, params.codec, params.frameRate, params.scale, params.pixelFormat, outputFile)
+	
+	local command = string.format("\"%s\" ", ffmpegPath)
+	command = command .. "-y "
+	command = command .. string.format("-progress %s ","/tmp/status.txt")
+	command = command .. string.format("-i \"%s\" ", inputPattern)
+	command = command .. string.format("-c:v %s ", params.codec)
+	
+	if (params.codec == "prores") then
+		-- 0 : ProRes422 (Proxy)
+		-- 1 : ProRes422 (LT)
+		-- 2 : ProRes422 (Normal)
+		-- 3 : ProRes422 (HQ)
+		command = command .. string.format("-profile:v %s ", 2)
+	end
+	
+	command = command .. string.format("-r %s ", params.frameRate)
+	command = command .. string.format("-vf %s ", params.scale)
+	command = command .. string.format("-pix_fmt %s ", params.pixelFormat)
+	command = command .. string.format("\"%s\" 2>/dev/null", outputFile)
+	
     myLogger:info(string.format("render command: %s", command))
-    
-	myLogger:trace("starting ffmpeg command")
-	--progressScope:setCaption("Rendering Video")
+    --LrErrors.throwUserError("Export failed." .. command)
+	
     result = LrTasks.execute(command)
     myLogger:trace(string.format("ffmpeg finished with exit code: %d", result))
+    if (result > 0) then
+    	LrErrors.throwUserError(string.format("Rendering failed with error code %d", result))
+    end
+    
     return result
 end
 
